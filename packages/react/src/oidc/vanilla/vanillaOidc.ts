@@ -69,7 +69,8 @@ export class VanillaOidc {
         return getValidTokenAsync(this._oidc, waitMs, numberWait);
     }
 
-    async userInfoAsync<T extends OidcUserInfo = OidcUserInfo>():Promise<T> {
+    async userInfoAsync<T extends OidcUserInfo = OidcUserInfo>(isRefresh?: boolean):Promise<T> {
+        if (isRefresh) this._oidc.userInfo = null;
         return this._oidc.userInfoAsync();
     }
 }

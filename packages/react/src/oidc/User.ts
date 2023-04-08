@@ -10,29 +10,45 @@ export enum OidcUserStatus {
 }
 
 export type OidcUser<T extends OidcUserInfo = OidcUserInfo> = {
-    user: T;
+    user?: T;
     status: OidcUserStatus;
 }
 
+export type OidcUserManager<T extends OidcUserInfo = OidcUserInfo> = {
+    oidcUser: T;
+    oidcUserLoadingState: OidcUserStatus;
+    refresh: () => void;
+}
+
+
 export const useOidcUser = <T extends OidcUserInfo = OidcUserInfo>(configurationName = 'default') => {
-    const [oidcUser, setOidcUser] = useState<OidcUser<T>>({ user: null, status: OidcUserStatus.Unauthenticated });
+    const [oidcUser, setOidcUser] = useState<OidcUser<T>>({ status: OidcUserStatus.Unauthenticated });
+    const [isRefresh, setIsRefresh] = useState<boolean>(false);
 
     const oidc = VanillaOidc.get(configurationName);
-    useEffect(() => {
-        let isMounted = true;
-        if (oidc && oidc.tokens) {
-            setOidcUser({ ...oidcUser, status: OidcUserStatus.Loading });
-            oidc.userInfoAsync()
-                .then((info) => {
-                    if (isMounted) {
-                        // @ts-ignore
-                        setOidcUser({ user: info, status: OidcUserStatus.Loaded });
-                    }
-                })
-                .catch(() => setOidcUser({ ...oidcUser, status: OidcUserStatus.LoadingError }));
-        }
-        return () => { isMounted = false; };
-    }, []);
 
-    return { oidcUser: oidcUser.user, oidcUserLoadingState: oidcUser.status };
+    useEffect(() => {
+        let isFirst = isRefresh === false && oidcUser.user === undefined;
+        if (oidc && oidc.tokens && (isFirst || isRefresh)) {
+            
+            setOidcUser(current => ({ ...current, status: OidcUserStatus.Loading }));
+            oidc.userInfoAsync<T>(isRefresh)
+            .then((info) => {
+                setOidcUser({ user: info, status: OidcUserStatus.Loaded });
+            })
+            .catch(() => setOidcUser(current => ({ ...current, status: OidcUserStatus.LoadingError })))
+            .finally(() => setIsRefresh(false));
+
+            
+        }
+    }, [isRefresh, oidc, oidcUser]);
+
+    const refresh = () => {
+        if (!isRefresh && oidcUser.status === OidcUserStatus.Loaded) {
+            setIsRefresh(true);
+        }
+    };
+
+
+    return { oidcUser: oidcUser.user!, oidcUserLoadingState: oidcUser.status, refresh } as OidcUserManager<T>;
 };
